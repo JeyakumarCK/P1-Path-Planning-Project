@@ -160,6 +160,109 @@ vector<double> getXY(double s, double d, vector<double> maps_s, vector<double> m
 
 }
 
+vector<double> find_lane_to_shift(vector<vector<double>> sensor_fusion, int lane, double car_s, double car_d, double ref_vel)
+{
+    int shift_by = 0;
+    int cost_left = 0;
+    int cost_right = 0;
+
+    for (int i=0; i<sensor_fusion.size(); i++)
+    {
+        cout << "Find Lane shift: Id=" << sensor_fusion[i][0] << ", s=" << sensor_fusion[i][5] << ", d(lane)=" << sensor_fusion[i][6] << ", gap=" << ((double)sensor_fusion[i][5])-car_s << endl;
+        
+        // car is in my lane
+        float d = sensor_fusion[i][6];
+        if(d < 0)
+        {
+            // check car seems to be in opposite lane, so, ignore them
+            //cout << "check car d is " << d << ", so ignoring this car" << endl;
+            continue;
+        }
+        double vx = sensor_fusion[i][3];
+        double vy = sensor_fusion[i][4];
+        double check_speed = sqrt(vx*vx+vy*vy);
+        double check_car_s = sensor_fusion[i][5];
+        double gap = check_car_s - car_s;
+        if (d < (2+4*lane+2) && d > (2+4*lane-2))
+        {
+            // Ignore the cars in current lane as we already decided to shift lane 
+            //cout << "check car d is " << d << ", and is same as our lane " << lane << " so ignoring this car" << endl;
+        } // end of car is in same lane
+        else if (d < (2+4*lane-2))
+        {
+            // check car seems to be in left lane
+            cout << "check car d is " << d << ", and is in LEFT of our lane " << lane << ". check how far it is from our car" << endl;
+            if (gap > 100) {
+                // check car is 100 units ahead of our car, so no worries (cost=1)
+                cost_left += 1;
+            } else if (gap > 50) {
+                // check car is 50 units ahead of our car, ok to shift (cost=5)
+                cost_left += 5;
+            } else if (gap > 0) {
+                // check car is very close to our car, no to shift (cost=100)
+                cost_left += 100;
+            } else if (gap < -100) {
+                // check car is 100 units behind of our car, so be cautious, but still can shift (cost=2)
+                cost_left += 2;
+            } else if (gap < -50) {
+                // check car is 50 units ahead of our car, still ok to shift (cost=5)
+                cost_left += 5;
+            } else if (gap < 0) {
+                // check car is very close to our car, no to shift (cost=100)
+                cost_left += 100;
+            } 
+            
+        } // end of car is in same lane - esle part
+        else if (d > (2+4*lane+2))
+        {
+            // check car seems to be in RIGHT lane
+            cout << "check car d is " << d << ", and is in RIGHT of our lane " << lane << ". check how far it is from our car" << endl;
+            if (gap > 100) {
+                // check car is 100 units ahead of our car, so no worries (cost=1)
+                cost_right += 1;
+            } else if (gap > 50) {
+                // check car is 50 units ahead of our car, ok to shift (cost=5)
+                cost_right += 5;
+            } else if (gap > 0) {
+                // check car is very close to our car, no to shift (cost=100)
+                cost_right += 100;
+            } else if (gap < -100) {
+                // check car is 100 units behind of our car, so be cautious, but still can shift (cost=2)
+                cost_right += 2;
+            } else if (gap < -50) {
+                // check car is 50 units ahead of our car, still ok to shift (cost=5)
+                cost_right += 5;
+            } else if (gap < 0) {
+                // check car is very close to our car, no to shift (cost=100)
+                cost_right += 100;
+            } 
+            
+        }// end of car is in same lane - esle part
+        
+    } // end of sensor fusion for loop
+    
+    cout << "cost_left=" << cost_left << ", cost_right=" << cost_right << endl;
+    
+    // First we will try to shift left in a left hand driving country. so
+    if (cost_left < 100) {
+        shift_by = -1;
+    } else if (cost_right < 100) {
+        shift_by = 1;
+    }
+    
+    vector<double> ls;
+    ls.push_back((double)shift_by);
+    double speed_reduction_by = 0;
+    if (cost_left > 50 && cost_right > 50)
+    {
+        speed_reduction_by = -1 * ref_vel / 5;
+    }
+    ls.push_back(speed_reduction_by);
+    
+    //return shift_by;
+    return ls;
+}
+
 int main() {
   uWS::Hub h;
 
@@ -207,8 +310,9 @@ int main() {
 
     int lane = 1; // lane could be 0,1,2
     double max_speed = 50.0; // mph
-    double desired_speed = max_speed - 1.0; //mph => desired velocity, which is lesser than max speed of the road
+    double desired_speed = max_speed - 2.0; //mph => desired velocity, which is lesser than max speed of the road
     double ref_vel = desired_speed; //mph => reference velocity that gets altered based on sensor fusion data (other vehicles)
+    double dist_to_maintain = 30; // meters - distance to maintain with front and back
 
     if (length && length > 2 && data[0] == '4' && data[1] == '2') {
 
@@ -251,35 +355,59 @@ int main() {
             {
                 car_s = end_path_s;
             }
-            bool too_close = false;
-
             
+            bool too_close = false;
+            bool change_lane = false;
+
+            cout << "Ego car: " << "car_s=" << car_s << ", car_d=" << car_d << ", car_speed=" << car_speed << endl;
             // find ref_v to use
             for (int i=0; i<sensor_fusion.size(); i++)
             {
+                //car's unique ID=0, car's x position in map coordinates=1, car's y position in map coordinates=2, 
+                //car's x velocity in m/s=3, car's y velocity in m/s=4, car's s position in frenet coordinates=5, car's d position in frenet coordinates=6.
+                
+                //cout << "Id=" << sensor_fusion[i][0] << ", s=" << sensor_fusion[i][5] << ", d(lane)=" << sensor_fusion[i][6] << ", gap=" << ((double)sensor_fusion[i][5])-car_s << endl;
+                
                 // car is in my lane
                 float d = sensor_fusion[i][6];
+                double vx = sensor_fusion[i][3];
+                double vy = sensor_fusion[i][4];
+                double check_speed = sqrt(vx*vx+vy*vy);
+                double check_car_s = sensor_fusion[i][5];
+                double gap = check_car_s - car_s;
                 if (d < (2+4*lane+2) && d > (2+4*lane-2))
                 {
-                    double vx = sensor_fusion[i][3];
-                    double vy = sensor_fusion[i][4];
-                    double check_speed = sqrt(vx*vx+vy*vy);
-                    double check_car_s = sensor_fusion[i][5];
                     
                     check_car_s += ((double)prev_size*0.02*check_speed); // if using previous points can project s value out
+                    
                     //check s values greater than mine and s gap
-                    if((check_car_s > car_s) && ((check_car_s - car_s) < 30))
+                    if((check_car_s > car_s) && (gap < dist_to_maintain))
                     {
                         // Do some logic here, lower reference velocity so we dont crash into the car infront of us, could
                         // also flag to try to change lanes
                         //ref_vel = 29.5; //mph
+                        cout << "check car is in same lane and gap is " << gap << endl;
                         too_close = true;
-                    }
-                    
-                }
-            }
+                        change_lane = true;
+                        
+                    } // end of gap is closer
+                } // end of car is in same lane
+                
+            } // end of sensor fusion for loop
 
-          	if(too_close)
+            int shift_lane_by = 0;
+            if (change_lane)
+            {
+                cout << "preparing lane change" << endl;
+                vector<double> ls = find_lane_to_shift(sensor_fusion, lane, car_s, car_d, ref_vel);
+                shift_lane_by = ls[0];
+                cout << "shift lane by " << shift_lane_by << endl;
+                lane += shift_lane_by;
+                ref_vel += ls[1];
+                cout << "new ref_vel after reduction by " << ls[1] << " is, ref_vel=" << ref_vel << endl;
+            } 
+
+            if(too_close && shift_lane_by == 0)
             {
                 ref_vel -= 0.224;
             }
@@ -293,7 +421,7 @@ int main() {
             // Later we will interpolate these waypoints with a spline and fill it in with more points that control speed
             vector<double> ptsx;
             vector<double> ptsy;
-            
+
             // reference x,y,yaw states
             // either we will reference the starting point as where the car is or at the previous paths end point
             double ref_x = car_x;
