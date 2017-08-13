@@ -22,7 +22,8 @@ In the given simulator, the other vehicles sharing the highway will also move fr
 ##### **Result & Future Opportunities**
 
 The car is able to drive in the simulator with out any major issues.  It is a very basic program that drives the car.  There are several opportunities to add to make it even smoother, safer & efficient.  Potential changes that can be added are, use own JMT instead of spline, instead of rough acceleration/deceleration, using a PIC or MPC controller.
-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+
+ 
 ---
 
 # CarND-Path-Planning-Project
