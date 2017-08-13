@@ -1,3 +1,30 @@
+Path Planning Project
+-------------
+
+The goal of the project is to arrive at path of a car in a highway environment simulator that drives the car safely with out any collision with other cars and with no jerks or max accelerations.  A simulator is provided as part of the project along with a base starter code. In addition to that, a set of sparse way point is also provided.  We have to arrive at a Jerk minimizing path that drives with in speed limit of 50MPH passing other vehicles sharing the highway.  The simulator provides the car's current telemetry data along with the sensor fusion data about the other cars on the road.  It also provides the previous path of the car that was used by the car in the previous step.
+
+##### **Approach**
+
+There are three portions in this project.  The first one is to plan a path that minimizes the jerk.  Next is to accelerate the vehicle to move it in the planned path.  And the third one is to use sensor fusion data to navigate through other cars either by passing them or reducing speed or both as appropriate. 
+
+##### **Path Planning**
+
+Jerk Minimizing Trajectory is a quintic polynominal equation which can be solved between two sparse way points and arrive at possible trajectories.  From those trajectories, each of them can be assessed to check whether it is safe to proceed in that path using other environmental data.  This quintic polynominal equations can be solved on our own (using the lesson exercises) or we can use any readily available libraries instead of reinventing the wheel.  As per the suggestion provided, spline is one the libraries available for C++ to solve such equation.  In my code, I have used spline library to solve the equation and arrive at the trajectory.  In the spline variable, we will set the coordinates of where the car wants to be in different time steps.  It generates a smooth path between those points and provides the y coordinates for any given x coordinate.  Instead of generating the path from scratch, we use the previous path's unused points and just add few additional points to keep the path points length to 50.  In this way, we can maintain the continuity of the car position and also avoid any jerk both in horizontal and vertical directions.
+
+##### **Vehicle Speed**
+
+The vehicle speed is controlled step by step by checking its current speed and whether any vehicle is in its front.  To avoid any jerk, the acceleration is done step by step.
+
+##### **Sensor Fusion**
+
+In the given simulator, the other vehicles sharing the highway will also move freely at different speed and change lanes as they deem appropriate.  The other vehicles' details are provided as sensor fusion data.  In order to find whether there is any obstacle in the road, we should be using this sensor fusion data and understand the environment around us.  Based on our environment, determine whether to continue moving in the same speed, or change lane &/or reduce speed. In my code, there is a function called `find_lane_to_shift` which houses the logic to determine which lane to shift.  It uses a simple cost based evaluation of various vehicles that are in front and adjacent lanes.  Depending up on the cost, our car either changes the lane to left or right or remains in the same lane and reduces its speed.
+
+##### **Result & Future Opportunities**
+
+The car is able to drive in the simulator with out any major issues.  It is a very basic program that drives the car.  There are several opportunities to add to make it even smoother, safer & efficient.  Potential changes that can be added are, use own JMT instead of spline, instead of rough acceleration/deceleration, using a PIC or MPC controller.
++-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-
+---
+
 # CarND-Path-Planning-Project
 Self-Driving Car Engineer Nanodegree Program
    
